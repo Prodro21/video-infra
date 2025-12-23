@@ -27,6 +27,14 @@ patches:
         path: /spec/replicas
         value: 1
 
+  - target:
+      kind: Deployment
+      name: video-edge
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+
   # Smaller storage for staging
   - target:
       kind: PersistentVolumeClaim
@@ -49,6 +57,8 @@ images:
   - name: ghcr.io/prodro21/video-platform
     newTag: latest
   - name: ghcr.io/prodro21/video-dashboard
+    newTag: latest
+  - name: ghcr.io/prodro21/video-edge
     newTag: latest
 
 labels:
