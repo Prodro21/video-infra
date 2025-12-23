@@ -1,0 +1,82 @@
+groups:
+  - name: video-system-alerts
+    rules:
+      # High request latency
+      - alert: HighRequestLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: High request latency on {{ $labels.job }}
+          description: "95th percentile request latency is {{ $value }}s for {{ $labels.job }}"
+
+      # Service down
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Service {{ $labels.job }} is down
+          description: "{{ $labels.job }} has been down for more than 1 minute"
+
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: High error rate on {{ $labels.job }}
+          description: "Error rate is {{ $value | humanizePercentage }} for {{ $labels.job }}"
+
+      # Upstream offline (video-edge specific)
+      - alert: UpstreamOffline
+        expr: upstream_online == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Video edge upstream is offline
+          description: "Video-edge has lost connection to upstream video-platform"
+
+      # High cache miss rate
+      - alert: HighCacheMissRate
+        expr: rate(cache_misses_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) > 0.8
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: High cache miss rate on video-edge
+          description: "Cache miss rate is {{ $value | humanizePercentage }}"
+
+      # Sync queue growing
+      - alert: SyncQueueGrowing
+        expr: sync_queue_length > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Sync queue is growing on video-edge
+          description: "Sync queue has {{ $value }} pending operations"
+
+      # Database connection pool exhausted
+      - alert: DatabaseConnectionsExhausted
+        expr: db_connections_active > 90
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Database connections near limit
+          description: "{{ $value }} active database connections"
+
+      # WebSocket connections spike
+      - alert: WebSocketConnectionsHigh
+        expr: websocket_connections_active > 500
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: High number of WebSocket connections
+          description: "{{ $value }} active WebSocket connections"

@@ -11,6 +11,8 @@ resources:
   - video-platform.yaml
   - video-dashboard.yaml
   - video-edge.yaml
+  - prometheus.yaml
+  - grafana.yaml
   - ingress.yaml
 
 labels:
