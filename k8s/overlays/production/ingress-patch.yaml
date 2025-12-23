@@ -1,0 +1,38 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: video-platform-ingress
+  namespace: video-platform
+  annotations:
+    # TLS with cert-manager
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # Force HTTPS
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  tls:
+    - hosts:
+        - video.example.com
+        - api.video.example.com
+      secretName: video-platform-tls
+  rules:
+    - host: video.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: video-dashboard
+                port:
+                  number: 80
+    - host: api.video.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: video-platform
+                port:
+                  number: 8080

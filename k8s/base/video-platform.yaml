@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: video-platform
+  namespace: video-platform
+  labels:
+    app: video-platform
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: video-platform
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: video-platform
+  namespace: video-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: video-platform
+  template:
+    metadata:
+      labels:
+        app: video-platform
+    spec:
+      initContainers:
+        # Wait for PostgreSQL to be ready
+        - name: wait-for-postgres
+          image: postgres:15-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h postgres -p 5432 -U video; do
+                echo "Waiting for PostgreSQL..."
+                sleep 2
+              done
+              echo "PostgreSQL is ready"
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: video-platform-secrets
+                  key: POSTGRES_PASSWORD
+      containers:
+        - name: video-platform
+          image: ghcr.io/prodro21/video-platform:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: video-platform-secrets
+                  key: DATABASE_URL
+            - name: CLIPS_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: video-platform-config
+                  key: CLIPS_PATH
+            - name: GIN_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: video-platform-config
+                  key: GIN_MODE
+          volumeMounts:
+            - name: clips-data
+              mountPath: /data/clips
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+      volumes:
+        - name: clips-data
+          persistentVolumeClaim:
+            claimName: clips-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: clips-pvc
+  namespace: video-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi

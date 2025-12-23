@@ -1,0 +1,34 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: video-platform-ingress
+  namespace: video-platform
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+spec:
+  tls:
+    - hosts:
+        - staging.video.example.com
+        - staging-api.video.example.com
+      secretName: video-platform-staging-tls
+  rules:
+    - host: staging.video.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: video-dashboard
+                port:
+                  number: 80
+    - host: staging-api.video.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: video-platform
+                port:
+                  number: 8080

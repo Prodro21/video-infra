@@ -1,0 +1,57 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: video-platform-staging
+
+resources:
+  - ../../base
+
+# Staging-specific patches
+patches:
+  # Ingress for staging
+  - path: ingress-patch.yaml
+  # Single replica for staging
+  - target:
+      kind: Deployment
+      name: video-platform
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+
+  - target:
+      kind: Deployment
+      name: video-dashboard
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+
+  # Smaller storage for staging
+  - target:
+      kind: PersistentVolumeClaim
+      name: postgres-data
+    patch: |
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 5Gi
+
+  - target:
+      kind: PersistentVolumeClaim
+      name: clips-pvc
+    patch: |
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 20Gi
+
+# Use latest images in staging
+images:
+  - name: ghcr.io/prodro21/video-platform
+    newTag: latest
+  - name: ghcr.io/prodro21/video-dashboard
+    newTag: latest
+
+labels:
+  - pairs:
+      environment: staging
+    includeSelectors: false
