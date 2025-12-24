@@ -1,0 +1,31 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Video Platform API
+  - job_name: 'video-platform'
+    static_configs:
+      - targets: ['video-platform:8080']
+    metrics_path: /metrics
+    scrape_interval: 10s
+
+  # Video Edge
+  - job_name: 'video-edge'
+    static_configs:
+      - targets: ['video-edge:8080']
+    metrics_path: /metrics
+    scrape_interval: 10s

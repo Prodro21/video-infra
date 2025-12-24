@@ -1,0 +1,138 @@
+version: '3.8'
+
+services:
+  # Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: video-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: videodb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../video-platform/scripts/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - video-network
+
+  # Main API Server
+  video-platform:
+    build:
+      context: ../video-platform
+      dockerfile: Dockerfile
+    container_name: video-platform
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=videodb
+      - STORAGE_PATH=/data/clips
+      - RECORDING_PATH=/data/recordings
+    volumes:
+      - clips-data:/data/clips
+      - recordings-data:/data/recordings
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - video-network
+
+  # Edge Caching Proxy
+  video-edge:
+    build:
+      context: ../video-edge
+      dockerfile: Dockerfile
+    container_name: video-edge
+    ports:
+      - "8081:8080"
+    environment:
+      - UPSTREAM_URL=http://video-platform:8080
+      - EDGE_PORT=8080
+      - CACHE_PATH=/cache
+      - CACHE_SIZE=10
+    volumes:
+      - edge-cache:/cache
+    depends_on:
+      video-platform:
+        condition: service_healthy
+    networks:
+      - video-network
+
+  # React Dashboard
+  video-dashboard:
+    build:
+      context: ../video-dashboard
+      dockerfile: Dockerfile
+    container_name: video-dashboard
+    ports:
+      - "3000:80"
+    volumes:
+      - ../video-dashboard/nginx.docker.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - video-platform
+    networks:
+      - video-network
+
+  # Prometheus Metrics
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: video-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus-docker.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - video-network
+
+  # Grafana Dashboards
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: video-grafana
+    ports:
+      - "3002:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+    networks:
+      - video-network
+
+volumes:
+  postgres-data:
+  clips-data:
+  recordings-data:
+  edge-cache:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  video-network:
+    driver: bridge
